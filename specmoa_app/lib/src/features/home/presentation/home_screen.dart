@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:specmoa_app/src/core/session/app_user.dart';
 import 'package:specmoa_app/src/core/session/session_repository.dart';
+import 'package:specmoa_app/src/features/auth/presentation/login_screen.dart';
 import 'package:specmoa_app/src/features/home/data/home_models.dart';
 import 'package:specmoa_app/src/features/home/data/home_repository.dart';
 import 'package:specmoa_app/src/shared/widgets/gradient_header.dart';
@@ -18,6 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   AppUser? _user;
   HomeResponse? _home;
+  bool _isGuest = false;
   bool _isLoading = true;
   String? _error;
 
@@ -34,13 +36,25 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final user = await _sessionRepository.ensureDemoUser();
+      final user = _sessionRepository.currentUser;
+      if (user == null) {
+        if (!mounted) return;
+        setState(() {
+          _user = null;
+          _home = null;
+          _isGuest = true;
+          _isLoading = false;
+        });
+        return;
+      }
+
       final home = await _homeRepository.fetchHome(user.id);
 
       if (!mounted) return;
       setState(() {
         _user = user;
         _home = home;
+        _isGuest = false;
         _isLoading = false;
       });
     } catch (_) {
@@ -49,6 +63,21 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
         _error = '홈 화면 데이터를 불러오지 못했습니다.';
       });
+    }
+  }
+
+  Future<void> _openLogin() async {
+    final loggedIn = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => const LoginScreen(
+          redirectToAppShellOnSuccess: false,
+          showSkipButton: true,
+        ),
+      ),
+    );
+
+    if (loggedIn == true) {
+      await _load();
     }
   }
 
@@ -62,11 +91,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final home = _home;
+
     return Column(
       children: [
         GradientHeader(
-          title: _user == null ? '안녕하세요!' : '${_user!.displayName}님, 안녕하세요!',
-          subtitle: '오늘도 목표를 향해 차근차근 나아가보세요',
+          title: _user == null ? '안녕하세요' : '${_user!.displayName}님 안녕하세요',
+          subtitle: '오늘도 목표를 향해 차근차근 나아가보세요.',
         ),
         Expanded(
           child: RefreshIndicator(
@@ -87,28 +118,81 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: EdgeInsets.symmetric(vertical: 48),
                     child: Center(child: CircularProgressIndicator()),
                   )
-                else if (_home != null) ...[
+                else if (_isGuest) ...[
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '둘러보기 모드',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            '탐색과 커뮤니티 열람은 계속 사용할 수 있어요. 내 스펙, 타이머, 마이페이지를 쓰려면 로그인해 주세요.',
+                            style: TextStyle(
+                              color: Color(0xFF66708D),
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: _openLogin,
+                            icon: const Icon(Icons.login),
+                            label: const Text('로그인하러 가기'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '게스트로 가능한 기능',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                          SizedBox(height: 12),
+                          Text('? 자격증 탐색과 상세 보기'),
+                          SizedBox(height: 8),
+                          Text('? 질문/후기 읽기와 댓글 열람'),
+                          SizedBox(height: 8),
+                          Text('? 서비스 구조와 화면 둘러보기'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ]
+                else if (home != null) ...[
                   Row(
                     children: [
                       Expanded(
                         child: _SummaryCard(
                           title: '내 자격증',
-                          value: _home!.summary.myQualificationCount.toString(),
+                          value: home.summary.myQualificationCount.toString(),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _SummaryCard(
                           title: '완료',
-                          value: _home!.summary.completedQualificationCount
-                              .toString(),
+                          value: home.summary.completedQualificationCount.toString(),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _SummaryCard(
                           title: '오늘',
-                          value: '${_home!.summary.todayStudyMinutes}m',
+                          value: '${home.summary.todayStudyMinutes}m',
                         ),
                       ),
                     ],
@@ -116,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 20),
                   Text('내 자격증', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 12),
-                  if (_home!.myQualifications.isEmpty)
+                  if (home.myQualifications.isEmpty)
                     const Card(
                       child: Padding(
                         padding: EdgeInsets.all(20),
@@ -124,7 +208,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     )
                   else
-                    ..._home!.myQualifications.map(
+                    ...home.myQualifications.map(
                       (item) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Card(
@@ -146,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 20),
                   Text('인기 질문', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 12),
-                  if (_home!.popularQuestions.isEmpty)
+                  if (home.popularQuestions.isEmpty)
                     const Card(
                       child: Padding(
                         padding: EdgeInsets.all(20),
@@ -154,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     )
                   else
-                    ..._home!.popularQuestions.map(
+                    ...home.popularQuestions.map(
                       (item) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Card(
@@ -170,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 20),
                   Text('합격 후기', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 12),
-                  if (_home!.passReviews.isEmpty)
+                  if (home.passReviews.isEmpty)
                     const Card(
                       child: Padding(
                         padding: EdgeInsets.all(20),
@@ -178,16 +262,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     )
                   else
-                    ..._home!.passReviews.map(
+                    ...home.passReviews.map(
                       (item) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Card(
                           child: ListTile(
                             contentPadding: const EdgeInsets.all(16),
                             title: Text(item.title),
-                            subtitle: Text(
-                              item.tipSummary ?? item.qualificationName,
-                            ),
+                            subtitle: Text(item.tipSummary ?? item.qualificationName),
                             trailing: Text(item.studyPeriodText ?? '-'),
                           ),
                         ),
@@ -218,14 +300,27 @@ class _SummaryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              value,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+              title,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF7A84A4),
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            const SizedBox(height: 6),
-            Text(title, style: const TextStyle(color: Color(0xFF6F7896))),
+            const SizedBox(height: 10),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF33405F),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
+
+

@@ -1,6 +1,7 @@
 ﻿import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:specmoa_app/src/core/api/api_exception.dart';
 import 'package:specmoa_app/src/core/config/api_config.dart';
 
 class ApiClient {
@@ -17,9 +18,7 @@ class ApiClient {
     );
     final response = await _client.get(uri);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Request failed: ${response.statusCode}');
-    }
+    _throwIfFailed(response);
 
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -38,9 +37,7 @@ class ApiClient {
       body: jsonEncode(body ?? <String, dynamic>{}),
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Request failed: ${response.statusCode}');
-    }
+    _throwIfFailed(response);
 
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -56,9 +53,7 @@ class ApiClient {
       body: jsonEncode(body ?? <String, dynamic>{}),
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Request failed: ${response.statusCode}');
-    }
+    _throwIfFailed(response);
 
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -67,14 +62,43 @@ class ApiClient {
     final uri = Uri.parse('${ApiConfig.baseUrl}$path');
     final response = await _client.delete(uri);
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Request failed: ${response.statusCode}');
-    }
+    _throwIfFailed(response);
 
     if (response.body.isEmpty) {
       return <String, dynamic>{};
     }
 
     return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  void _throwIfFailed(http.Response response) {
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return;
+    }
+
+    String message = '요청에 실패했습니다.';
+
+    if (response.body.isNotEmpty) {
+      try {
+        final json = jsonDecode(response.body);
+        if (json is Map<String, dynamic>) {
+          final errorMessage = json['message'];
+          if (errorMessage is String && errorMessage.trim().isNotEmpty) {
+            message = errorMessage;
+          } else if (errorMessage is List && errorMessage.isNotEmpty) {
+            message = errorMessage.first.toString();
+          } else if (json['error'] is String) {
+            message = json['error'] as String;
+          }
+        }
+      } catch (_) {
+        message = response.body;
+      }
+    }
+
+    throw ApiException(
+      message: message,
+      statusCode: response.statusCode,
+    );
   }
 }

@@ -1,12 +1,15 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:specmoa_app/src/core/session/app_user.dart';
 import 'package:specmoa_app/src/core/session/session_repository.dart';
+import 'package:specmoa_app/src/features/auth/presentation/login_screen.dart';
 import 'package:specmoa_app/src/features/my/data/my_models.dart';
 import 'package:specmoa_app/src/features/my/data/my_repository.dart';
 import 'package:specmoa_app/src/shared/widgets/gradient_header.dart';
 
 class MyScreen extends StatefulWidget {
-  const MyScreen({super.key});
+  const MyScreen({super.key, this.onLoggedOut});
+
+  final VoidCallback? onLoggedOut;
 
   @override
   State<MyScreen> createState() => _MyScreenState();
@@ -35,7 +38,17 @@ class _MyScreenState extends State<MyScreen> {
     });
 
     try {
-      final user = await _sessionRepository.ensureDemoUser();
+      final user = _sessionRepository.currentUser;
+      if (user == null) {
+        if (!mounted) return;
+        setState(() {
+          _user = null;
+          _data = null;
+          _isLoading = false;
+        });
+        return;
+      }
+
       final data = await _myRepository.fetchMy(user.id);
 
       if (!mounted) return;
@@ -51,6 +64,31 @@ class _MyScreenState extends State<MyScreen> {
         _error = '마이 화면 데이터를 불러오지 못했습니다.';
       });
     }
+  }
+
+  Future<void> _openLogin() async {
+    final loggedIn = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => const LoginScreen(
+          redirectToAppShellOnSuccess: false,
+          showSkipButton: true,
+        ),
+      ),
+    );
+
+    if (loggedIn == true) {
+      await _load();
+    }
+  }
+
+  Future<void> _logout() async {
+    await _sessionRepository.logout();
+    if (!mounted) return;
+    widget.onLoggedOut?.call();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('로그아웃되었습니다.')),
+    );
+    await _load();
   }
 
   Future<void> _updateGoal(int nextTargetHours) async {
@@ -202,6 +240,35 @@ class _MyScreenState extends State<MyScreen> {
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 48),
                     child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_user == null)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '로그인 후 사용할 수 있어요',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            '마이페이지에서는 내 학습 통계, 주간 목표, 알림 설정을 관리할 수 있습니다.',
+                            style: TextStyle(
+                              color: Color(0xFF6F7896),
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: _openLogin,
+                            icon: const Icon(Icons.login),
+                            label: const Text('로그인하러 가기'),
+                          ),
+                        ],
+                      ),
+                    ),
                   )
                 else if (data != null) ...[
                   Card(
@@ -460,6 +527,15 @@ class _MyScreenState extends State<MyScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonalIcon(
+                      onPressed: _isSaving ? null : _logout,
+                      icon: const Icon(Icons.logout),
+                      label: const Text('로그아웃'),
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -512,3 +588,5 @@ class _StatCard extends StatelessWidget {
     );
   }
 }
+
+

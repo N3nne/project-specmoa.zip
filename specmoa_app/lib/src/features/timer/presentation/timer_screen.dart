@@ -55,7 +55,7 @@ class _TimerScreenState extends State<TimerScreen> {
     });
 
     try {
-      final user = await _sessionRepository.ensureDemoUser();
+      final user = await _sessionRepository.requireAuthenticatedUser();
       final specs = await _specRepository.fetchMySpecs(user.id);
       final summary = await _timerRepository.fetchTodaySummary(user.id);
 

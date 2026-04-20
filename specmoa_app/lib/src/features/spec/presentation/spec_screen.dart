@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:specmoa_app/src/core/session/app_user.dart';
 import 'package:specmoa_app/src/core/session/session_repository.dart';
 import 'package:specmoa_app/src/features/explore/data/qualification_models.dart';
@@ -17,8 +17,7 @@ class SpecScreen extends StatefulWidget {
 class _SpecScreenState extends State<SpecScreen> {
   final SessionRepository _sessionRepository = SessionRepository();
   final SpecRepository _specRepository = SpecRepository();
-  final QualificationsRepository _qualificationsRepository =
-      QualificationsRepository();
+  final QualificationsRepository _qualificationsRepository = QualificationsRepository();
 
   AppUser? _user;
   List<MySpecItem> _items = const [];
@@ -38,7 +37,7 @@ class _SpecScreenState extends State<SpecScreen> {
     });
 
     try {
-      final user = await _sessionRepository.ensureDemoUser();
+      final user = await _sessionRepository.requireAuthenticatedUser();
       final items = await _specRepository.fetchMySpecs(user.id);
 
       if (!mounted) return;
@@ -77,9 +76,7 @@ class _SpecScreenState extends State<SpecScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text(item.name),
                   subtitle: Text(
-                    item.seriesName.isEmpty
-                        ? item.qualificationTypeName
-                        : item.seriesName,
+                    item.seriesName.isEmpty ? item.qualificationTypeName : item.seriesName,
                   ),
                   trailing: const Icon(Icons.add_circle_outline),
                   onTap: () => Navigator.of(context).pop(item),
@@ -104,11 +101,7 @@ class _SpecScreenState extends State<SpecScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            '자격증을 추가하지 못했습니다.',
-          ),
-        ),
+        const SnackBar(content: Text('자격증을 추가하지 못했습니다.')),
       );
     }
   }
@@ -140,11 +133,8 @@ class _SpecScreenState extends State<SpecScreen> {
     return Column(
       children: [
         GradientHeader(
-          title: _user == null
-              ? '내 스펙'
-              : '${_user!.displayName}님의 스펙',
-          subtitle:
-              '등록한 자격증과 학습 현황을 한눈에 확인해요',
+          title: _user == null ? '내 스펙' : '${_user!.displayName}님의 스펙',
+          subtitle: '등록한 자격증과 학습 진행 상태를 확인해요.',
         ),
         Expanded(
           child: RefreshIndicator(
@@ -170,9 +160,7 @@ class _SpecScreenState extends State<SpecScreen> {
                     const Card(
                       child: Padding(
                         padding: EdgeInsets.all(20),
-                        child: Text(
-                          '아직 등록된 자격증이 없어요.',
-                        ),
+                        child: Text('아직 등록된 자격증이 없어요.'),
                       ),
                     )
                   else
@@ -197,9 +185,7 @@ class _SpecScreenState extends State<SpecScreen> {
                                         borderRadius: BorderRadius.circular(14),
                                       ),
                                       child: Text(
-                                        item.dDay == null
-                                            ? '시험일 미정'
-                                            : 'D-${item.dDay}',
+                                        item.dDay == null ? '시험일 미정' : 'D-${item.dDay}',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w800,
                                           color: Color(0xFF4B63FF),
@@ -224,9 +210,7 @@ class _SpecScreenState extends State<SpecScreen> {
                                 const SizedBox(height: 8),
                                 Text(
                                   _studyLabel(item.totalStudyMinutes),
-                                  style: const TextStyle(
-                                    color: Color(0xFF6A7195),
-                                  ),
+                                  style: const TextStyle(color: Color(0xFF6F7896)),
                                 ),
                               ],
                             ),
@@ -234,12 +218,16 @@ class _SpecScreenState extends State<SpecScreen> {
                         ),
                       ),
                     ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: _showAddQualificationDialog,
                     icon: const Icon(Icons.add),
-                    label: const Text(
-                      '자격증 추가하기',
+                    label: const Text('새 자격증 추가하기'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
                     ),
                   ),
                 ],

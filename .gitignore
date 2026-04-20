@@ -1,0 +1,10 @@
+﻿server-test/.env
+server-test/node_modules/
+server-test/dist/
+server-test/flutter_updates/
+specmoa_app/.dart_tool/
+specmoa_app/build/
+specmoa_app/.idea/
+specmoa_app/.flutter-plugins-dependencies
+specmoa_app/specmoa_app.iml
+specmoa_app/.metadata

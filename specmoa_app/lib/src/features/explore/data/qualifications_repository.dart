@@ -94,6 +94,22 @@ class QualificationsRepository {
     );
   }
 
+  Future<void> updateQuestionComment({
+    required String commentId,
+    required String content,
+  }) async {
+    await _apiClient.patchJson(
+      '/questions/comments/$commentId',
+      body: {
+        'content': content,
+      },
+    );
+  }
+
+  Future<void> deleteQuestionComment(String commentId) async {
+    await _apiClient.deleteJson('/questions/comments/$commentId');
+  }
+
   Future<void> updateQuestion({
     required String id,
     required String title,
@@ -167,6 +183,22 @@ class QualificationsRepository {
         'content': content,
       },
     );
+  }
+
+  Future<void> updateReviewComment({
+    required String commentId,
+    required String content,
+  }) async {
+    await _apiClient.patchJson(
+      '/reviews/comments/$commentId',
+      body: {
+        'content': content,
+      },
+    );
+  }
+
+  Future<void> deleteReviewComment(String commentId) async {
+    await _apiClient.deleteJson('/reviews/comments/$commentId');
   }
 
   Future<void> updateReview({

@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:specmoa_app/src/core/session/app_user.dart';
 import 'package:specmoa_app/src/core/session/session_repository.dart';
+import 'package:specmoa_app/src/features/auth/presentation/login_screen.dart';
 import 'package:specmoa_app/src/features/explore/data/qualification_models.dart';
 import 'package:specmoa_app/src/features/explore/data/qualifications_repository.dart';
 
@@ -43,12 +44,11 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     });
 
     try {
-      final user = await _sessionRepository.ensureDemoUser();
       final detail = await _repository.fetchQuestionDetail(widget.questionId);
 
       if (!mounted) return;
       setState(() {
-        _user = user;
+        _user = _sessionRepository.currentUser;
         _detail = detail;
         _isLoading = false;
       });
@@ -61,8 +61,38 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     }
   }
 
+  Future<bool> _ensureLoggedIn() async {
+    if (_sessionRepository.isAuthenticated) {
+      _user = _sessionRepository.currentUser;
+      return true;
+    }
+
+    final loggedIn = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => const LoginScreen(
+          redirectToAppShellOnSuccess: false,
+          showSkipButton: true,
+        ),
+      ),
+    );
+
+    if (!mounted) return false;
+
+    if (loggedIn == true) {
+      await _load();
+      return true;
+    }
+
+    if (!mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('이 기능은 로그인 후 사용할 수 있어요.')),
+    );
+    return false;
+  }
+
   Future<void> _submitComment() async {
-    if (_user == null) return;
+    final canContinue = await _ensureLoggedIn();
+    if (!canContinue || _user == null) return;
 
     final content = _commentController.text.trim();
     if (content.isEmpty) {
@@ -89,7 +119,108 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     }
   }
 
+  Future<void> _editComment(CommunityCommentModel item) async {
+    final canContinue = await _ensureLoggedIn();
+    if (!mounted || !canContinue) return;
+
+    final contentController = TextEditingController(text: item.content);
+
+    final shouldSubmit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('댓글 수정'),
+        content: TextField(
+          controller: contentController,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: '댓글 내용',
+            alignLabelWithHint: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (shouldSubmit != true) return;
+
+    final content = contentController.text.trim();
+    if (content.isEmpty) {
+      _showSnackBar('댓글 내용을 입력해주세요.');
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      await _repository.updateQuestionComment(
+        commentId: item.id,
+        content: content,
+      );
+      await _load();
+      _showSnackBar('댓글이 수정되었습니다.');
+    } catch (_) {
+      _showSnackBar('댓글 수정에 실패했습니다.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  Future<void> _deleteComment(CommunityCommentModel item) async {
+    final canContinue = await _ensureLoggedIn();
+    if (!mounted || !canContinue) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('댓글 삭제'),
+        content: const Text('이 댓글을 삭제하시겠어요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (confirmed != true) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      await _repository.deleteQuestionComment(item.id);
+      await _load();
+      _showSnackBar('댓글이 삭제되었습니다.');
+    } catch (_) {
+      _showSnackBar('댓글 삭제에 실패했습니다.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
   Future<void> _editQuestion(QuestionDetailPostModel item) async {
+    final canContinue = await _ensureLoggedIn();
+    if (!mounted || !canContinue) return;
+
     final titleController = TextEditingController(text: item.title);
     final contentController = TextEditingController(text: item.content);
 
@@ -130,6 +261,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
       ),
     );
 
+    if (!mounted) return;
+
     if (shouldSubmit != true) return;
 
     setState(() => _isSubmitting = true);
@@ -151,6 +284,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   }
 
   Future<void> _deleteQuestion(QuestionDetailPostModel item) async {
+    final canContinue = await _ensureLoggedIn();
+    if (!mounted || !canContinue) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -168,6 +304,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         ],
       ),
     );
+
+    if (!mounted) return;
 
     if (confirmed != true) return;
 
@@ -300,11 +438,37 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              comment.author ?? '익명',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    comment.author ?? '익명',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                if (_user?.id == comment.userId)
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        _editComment(comment);
+                                      } else if (value == 'delete') {
+                                        _deleteComment(comment);
+                                      }
+                                    },
+                                    itemBuilder: (context) => const [
+                                      PopupMenuItem(
+                                        value: 'edit',
+                                        child: Text('수정'),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'delete',
+                                        child: Text('삭제'),
+                                      ),
+                                    ],
+                                  ),
+                              ],
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -326,38 +490,59 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                   ),
                 ),
               const SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '댓글 작성',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _commentController,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          hintText: '질문에 대한 답변이나 의견을 남겨보세요.',
-                          alignLabelWithHint: true,
-                          border: OutlineInputBorder(),
+              if (_user == null)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '댓글을 남기려면 로그인해 주세요',
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton(
-                          onPressed: _isSubmitting ? null : _submitComment,
-                          child: const Text('댓글 등록'),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: () => _ensureLoggedIn(),
+                          child: const Text('로그인하고 댓글 작성하기'),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '댓글 작성',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _commentController,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            hintText: '질문에 대한 답변이나 의견을 남겨보세요.',
+                            alignLabelWithHint: true,
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton(
+                            onPressed: _isSubmitting ? null : _submitComment,
+                            child: const Text('댓글 등록'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
             ],
           ],
         ),
@@ -390,3 +575,7 @@ class _InfoChip extends StatelessWidget {
     );
   }
 }
+
+
+
+

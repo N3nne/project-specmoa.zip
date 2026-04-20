@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:specmoa_app/src/core/session/session_repository.dart';
+import 'package:specmoa_app/src/features/auth/presentation/login_screen.dart';
 import 'package:specmoa_app/src/features/explore/presentation/explore_screen.dart';
 import 'package:specmoa_app/src/features/home/presentation/home_screen.dart';
 import 'package:specmoa_app/src/features/my/presentation/my_screen.dart';
@@ -13,38 +15,96 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _currentIndex = 0;
+  final SessionRepository _sessionRepository = SessionRepository();
 
-  final _screens = const [
-    HomeScreen(),
-    SpecScreen(),
-    TimerScreen(),
-    ExploreScreen(),
-    MyScreen(),
-  ];
+  int _currentIndex = 0;
+  int _refreshSeed = 0;
+
+  bool _requiresAuthTab(int index) => index == 1 || index == 2 || index == 4;
+
+  List<Widget> _buildScreens() {
+    return [
+      KeyedSubtree(
+        key: ValueKey('home-$_refreshSeed'),
+        child: const HomeScreen(),
+      ),
+      KeyedSubtree(
+        key: ValueKey('spec-$_refreshSeed'),
+        child: const SpecScreen(),
+      ),
+      KeyedSubtree(
+        key: ValueKey('timer-$_refreshSeed'),
+        child: const TimerScreen(),
+      ),
+      KeyedSubtree(
+        key: ValueKey('explore-$_refreshSeed'),
+        child: const ExploreScreen(),
+      ),
+      KeyedSubtree(
+        key: ValueKey('my-$_refreshSeed'),
+        child: MyScreen(onLoggedOut: _handleLoggedOut),
+      ),
+    ];
+  }
+
+  Future<void> _onDestinationSelected(int index) async {
+    if (_requiresAuthTab(index) && !_sessionRepository.isAuthenticated) {
+      final loggedIn = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (_) => const LoginScreen(
+            redirectToAppShellOnSuccess: false,
+            showSkipButton: true,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+      if (loggedIn == true) {
+        setState(() {
+          _refreshSeed += 1;
+          _currentIndex = index;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('이 기능은 로그인 후 사용할 수 있어요.')),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _currentIndex = index;
+    });
+  }
+
+  void _handleLoggedOut() {
+    if (!mounted) return;
+    setState(() {
+      _refreshSeed += 1;
+      _currentIndex = 0;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final screens = _buildScreens();
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         backgroundColor: Colors.white,
         indicatorColor: const Color(0xFFE9EDFF),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onDestinationSelected: _onDestinationSelected,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home),
-            label: '홈',
+            label: 'Home',
           ),
           NavigationDestination(
             icon: Icon(Icons.badge_outlined),
@@ -71,3 +131,5 @@ class _AppShellState extends State<AppShell> {
     );
   }
 }
+
+

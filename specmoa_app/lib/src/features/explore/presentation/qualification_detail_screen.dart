@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:specmoa_app/src/core/session/app_user.dart';
 import 'package:specmoa_app/src/core/session/session_repository.dart';
+import 'package:specmoa_app/src/features/auth/presentation/login_screen.dart';
 import 'package:specmoa_app/src/features/explore/data/qualification_models.dart';
 import 'package:specmoa_app/src/features/explore/data/qualifications_repository.dart';
 import 'package:specmoa_app/src/features/explore/presentation/question_detail_screen.dart';
@@ -44,7 +45,7 @@ class _QualificationDetailScreenState extends State<QualificationDetailScreen> {
     });
 
     try {
-      final user = await _sessionRepository.ensureDemoUser();
+      final user = _sessionRepository.currentUser;
       final detail = await _repository.fetchQualificationDetail(
         widget.qualificationCode,
       );
@@ -68,7 +69,37 @@ class _QualificationDetailScreenState extends State<QualificationDetailScreen> {
     }
   }
 
+  Future<bool> _ensureLoggedIn() async {
+    if (_sessionRepository.isAuthenticated) {
+      _user = _sessionRepository.currentUser;
+      return true;
+    }
+
+    final loggedIn = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => const LoginScreen(
+          redirectToAppShellOnSuccess: false,
+          showSkipButton: true,
+        ),
+      ),
+    );
+
+    if (loggedIn == true) {
+      await _load();
+      return true;
+    }
+
+    if (!mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('작성 기능은 로그인 후 사용할 수 있어요.')),
+    );
+    return false;
+  }
+
   Future<void> _createQuestion() async {
+    final canContinue = await _ensureLoggedIn();
+    if (!canContinue || !mounted) return;
+
     final titleController = TextEditingController();
     final contentController = TextEditingController();
 
@@ -141,6 +172,9 @@ class _QualificationDetailScreenState extends State<QualificationDetailScreen> {
   }
 
   Future<void> _createReview() async {
+    final canContinue = await _ensureLoggedIn();
+    if (!canContinue || !mounted) return;
+
     final titleController = TextEditingController();
     final periodController = TextEditingController();
     final tipController = TextEditingController();
@@ -231,7 +265,7 @@ class _QualificationDetailScreenState extends State<QualificationDetailScreen> {
 
   Future<void> _openQuestionDetail(String questionId) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      MaterialPageRoute<bool>(
         builder: (_) => QuestionDetailScreen(questionId: questionId),
       ),
     );
@@ -240,7 +274,7 @@ class _QualificationDetailScreenState extends State<QualificationDetailScreen> {
 
   Future<void> _openReviewDetail(String reviewId) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      MaterialPageRoute<bool>(
         builder: (_) => ReviewDetailScreen(reviewId: reviewId),
       ),
     );
@@ -350,7 +384,7 @@ class _QualificationDetailScreenState extends State<QualificationDetailScreen> {
                   FilledButton.tonalIcon(
                     onPressed: _isSubmitting ? null : _createQuestion,
                     icon: const Icon(Icons.edit_outlined),
-                    label: const Text('질문 쓰기'),
+                    label: Text(_user == null ? '로그인 후 작성' : '질문 쓰기'),
                   ),
                 ],
               ),
@@ -400,7 +434,7 @@ class _QualificationDetailScreenState extends State<QualificationDetailScreen> {
                   FilledButton.tonalIcon(
                     onPressed: _isSubmitting ? null : _createReview,
                     icon: const Icon(Icons.rate_review_outlined),
-                    label: const Text('후기 쓰기'),
+                    label: Text(_user == null ? '로그인 후 작성' : '후기 쓰기'),
                   ),
                 ],
               ),
@@ -474,3 +508,5 @@ class _TagChip extends StatelessWidget {
     );
   }
 }
+
+
